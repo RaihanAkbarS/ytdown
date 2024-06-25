@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, Response
+from flask import Flask, render_template, request, Response, send_file
 import yt_dlp
+import os
 
 app = Flask(__name__)
 
@@ -14,23 +15,20 @@ def download():
 
     ydl_opts = {
         'format': f'best[height<={quality}]',
+        'outtmpl': 'downloads/%(title)s.%(ext)s',  # Ensure the file is saved to a known location
     }
 
-    def generate():
+    try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            try:
-                info_dict = ydl.extract_info(url, download=True)
-                file_path = ydl.prepare_filename(info_dict)
-                with open(file_path, 'rb') as f:
-                    while True:
-                        chunk = f.read(1024 * 1024)  # Read 1MB chunks
-                        if not chunk:
-                            break
-                        yield chunk
-            except yt_dlp.utils.DownloadError as e:
-                yield str(e)
-
-    return Response(generate(), mimetype='video/mp4')
+            info_dict = ydl.extract_info(url, download=True)
+            file_path = ydl.prepare_filename(info_dict)
+            
+            if os.path.exists(file_path):
+                return send_file(file_path, as_attachment=True)
+            else:
+                return "File not found", 404
+    except yt_dlp.utils.DownloadError as e:
+        return str(e), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
